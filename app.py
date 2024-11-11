@@ -1,31 +1,59 @@
-import osmnx as ox
-import networkx as nx
-from pyvis.network import Network
 import streamlit as st
+import matplotlib.pyplot as plt
+import utils
+import maximum_flow
 
-# Define area of interest
-place_name = "District 10, Ho Chi Minh City, Vietnam"
-graph = ox.graph_from_place(place_name, network_type="drive")
+# Title and description
+st.title("Interactive Plotting App")
+st.write("Select a district to visualize its road network and calculate maximum flow between streets.")
 
-# Convert the NetworkX graph to a Pyvis network
-net = Network(notebook=True)
+# User input for district selection
+option = st.selectbox(
+    "What district do you want to show?",
+    ("District 10", "District Binh Thanh", "District Tan Binh"),
+)
 
-# Add nodes and edges to the Pyvis network
-for node in graph.nodes(data=True):
-    net.add_node(node[0], title=node[1]['name'] if 'name' in node[1]
-                 else '', x=node[1]['x'], y=node[1]['y'])
+# Check if 'graph', 'street_names', and 'fig' are in session state; if not, initialize them
+if "graph" not in st.session_state:
+    st.session_state.graph = None
+if "street_names" not in st.session_state:
+    st.session_state.street_names = []
+if "fig" not in st.session_state:
+    st.session_state.fig = None
 
-for u, v, data in graph.edges(data=True):
-    net.add_edge(u, v)
+# Generate Network Plot button logic
+if st.button("Generate Network Plot"):
+    st.write(f"Showing road network for: {option}")
+    graph, street_names, fig, ax = utils.plot_map(option)
+    
+    # Store in session state
+    st.session_state.graph = graph
+    st.session_state.street_names = street_names
+    st.session_state.fig = fig
 
-# Set up the Streamlit app
-st.title("Road Network Visualization")
-st.write(f"Visualizing the road network for {place_name}")
+# Display the initial network plot if it exists in session state
+if st.session_state.fig is not None:
+    st.write("### Network Plot")
+    st.pyplot(st.session_state.fig)
 
-# Render the network in the Streamlit app
-net.show('network.html')
-
-# Display the HTML file in the Streamlit app
-HtmlFile = open('network.html', 'r', encoding='utf-8')
-source_code = HtmlFile.read()
-st.components.v1.html(source_code, height=800, scrolling=True)
+# Display the street options only if the graph and street names are loaded
+if st.session_state.graph is not None:
+    st.write("### Select Streets for Maximum Flow Calculation")
+    
+    # Allow user to select starting and destination streets
+    street1 = st.selectbox("Choose starting street (node1):", st.session_state.street_names, key="street1")
+    street2 = st.selectbox("Choose destination street (node2):", st.session_state.street_names, key="street2")
+    
+    # Only show the "Generate Maximum Flow" button if both streets have been selected
+    if street1 and street2:
+        if st.button("Generate Maximum Flow"):
+            max_flow_value, fig2, ax2 = utils.find_maximum_flow(st.session_state.graph, street1, street2)
+            
+            if max_flow_value is not None:
+                st.write(f"The maximum flow from {street1} to {street2} using Dinitz's algorithm is: {max_flow_value}")
+                
+                # Display the maximum flow plot in a separate container
+                st.write("### Maximum Flow Plot")
+                st.pyplot(fig2)
+            else:
+                st.write("Error: Unable to calculate maximum flow. Please check your input and try again.")
